@@ -1,0 +1,9 @@
+.git
+.github
+.venv
+venv
+tests
+k8s
+reports
+**/__pycache__
+*.md

@@ -1,0 +1,26 @@
+# CI/CD do exchange: usa o pipeline reutilizável do repositório platform
+# (pytest, Trivy, imagem multi-arch no GHCR/ECR e deploy no EKS).
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
+jobs:
+  pipeline:
+    uses: pna26/platform/.github/workflows/service.yaml@main
+    with:
+      service: exchange
+      image: exchange-service
+      language: python
+      aws-region: ${{ vars.AWS_REGION }}
+      eks-cluster: ${{ vars.EKS_CLUSTER }}
+      k8s-namespace: ${{ vars.K8S_NAMESPACE || 'store' }}
+    secrets: inherit

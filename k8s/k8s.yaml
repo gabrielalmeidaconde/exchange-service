@@ -1,0 +1,90 @@
+# Exchange no EKS: só é acessível pelo gateway (ClusterIP), como no compose.
+# O CI troca a imagem ":latest" pela tag do commit antes do kubectl apply.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: exchange-configmap
+data:
+  EXCHANGE_API_URL: https://economia.awesomeapi.com.br/json/last
+  CACHE_TTL: "30"
+  CACHE_STALE_TTL: "600"
+  UPSTREAM_TIMEOUT: "3"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: exchange
+  labels:
+    app: exchange
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: exchange
+  template:
+    metadata:
+      labels:
+        app: exchange
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8080"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: exchange
+          image: ghcr.io/pna26/exchange-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: exchange-configmap
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "96Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ "ALL" ]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: exchange
+spec:
+  type: ClusterIP
+  selector:
+    app: exchange
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
